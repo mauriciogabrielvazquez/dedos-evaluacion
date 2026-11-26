@@ -6,7 +6,7 @@ import 'package:http/http.dart' as http;
 import 'dart:convert';
 import 'package:socket_io_client/socket_io_client.dart' as IO;
 import 'widgets/weather_widget.dart';
-import 'db/database_helper.dart';
+import 'screens/pasajeros_screen.dart';
 
 void main() {
   runApp(
@@ -47,43 +47,96 @@ class _LoginScreenState extends State<LoginScreen> {
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
   bool _isLoading = false;
-  // REEMPLAZA MI_IP_LOCAL POR TU IP (ej. 192.168.100.11)
+  
+  // URL del backend
   final String apiUrl = 'http://MI_IP_LOCAL:3000/api/auth/login';
 
+  // RF05: Función para mostrar mensajes genéricos
+  void _mostrarMensajeGenerico(String mensaje, {bool esError = true}) {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(mensaje, style: const TextStyle(fontWeight: FontWeight.bold)),
+        backgroundColor: esError ? Colors.red : Colors.green,
+      ),
+    );
+  }
+
   Future<void> _iniciarSesion() async {
-    if (_emailController.text.isEmpty || _passwordController.text.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Llena todos los campos')));
+    final email = _emailController.text;
+    final password = _passwordController.text;
+
+    // RF02 y Extra: Validar que no estén vacíos ni contengan solo espacios
+    if (email.trim().isEmpty || password.trim().isEmpty) {
+      _mostrarMensajeGenerico('Debes ingresar tus credenciales.');
       return;
     }
+
+    // RF03: Rechazar entradas que superen una longitud definida (Prevención de inyecciones)
+    if (email.length > 50 || password.length > 50) {
+      _mostrarMensajeGenerico('Las credenciales exceden la longitud permitida.');
+      return;
+    }
+
+    // Extra: Comprobar que la contraseña tenga al menos 8 caracteres
+    // RF05: Usamos un mensaje de error genérico en lugar de decir "la contraseña es muy corta"
+    if (password.length < 8) {
+      _mostrarMensajeGenerico('Credenciales inválidas.');
+      return;
+    }
+
+    // RF06: Código seguro, jamás imprimir 'password' en consola/Logcat.
+    // Solo registramos el evento y el usuario con fines de auditoría.
+    debugPrint('🛡️ [SEGURIDAD] Intento de acceso para usuario: ${email.trim()}');
+
     setState(() => _isLoading = true);
+
+    // --- ACCESO SIMULADO / HARDCODEADO (RF07: Mostrar mensaje de acceso) ---
+    if (email.trim() == 'admin@travelapp.com' && password == 'admin123') {
+      _mostrarMensajeGenerico('Acceso seguro exitoso. Bienvenido.', esError: false);
+      
+      await Future.delayed(const Duration(seconds: 1)); // Pequeña pausa para que se vea el mensaje
+      
+      if (mounted) {
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(builder: (context) => const MainTabScreen(userId: 'admin-123')),
+        );
+      }
+      return; // Detiene la ejecución aquí para no ir al backend
+    }
+
+    // --- FLUJO NORMAL HACIA EL BACKEND ---
     try {
       final response = await http.post(
         Uri.parse(apiUrl),
         headers: {'Content-Type': 'application/json'},
         body: jsonEncode({
-          'email': _emailController.text.trim(),
-          'password': _passwordController.text.trim(),
+          'email': email.trim(),
+          'password': password.trim(), // Se envía limpio de espacios
         }),
       );
+      
       final data = jsonDecode(response.body);
+      
       if (response.statusCode == 200 && data['userId'] != null) {
+        _mostrarMensajeGenerico('Acceso seguro exitoso. Bienvenido.', esError: false); // RF07
+        await Future.delayed(const Duration(seconds: 1));
+        
         if (mounted) {
           Navigator.pushReplacement(
             context,
-            MaterialPageRoute(
-              builder: (context) => MainTabScreen(userId: data['userId'].toString()),
-            ),
+            MaterialPageRoute(builder: (context) => MainTabScreen(userId: data['userId'].toString())),
           );
         }
       } else {
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(data['error'] ?? 'Error de credenciales')));
-        }
+        // RF05: Mensaje genérico al fallar, nunca revelar si falló el correo o la contraseña
+        _mostrarMensajeGenerico('Credenciales inválidas.'); 
       }
     } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Error al conectar con el servidor')));
-      }
+      // RF06: No imprimir el error completo del servidor en producción, mostrar algo genérico
+      debugPrint('🛡️ [SEGURIDAD] Error de conexión al servidor en intento de login.');
+      _mostrarMensajeGenerico('Servicio no disponible temporalmente.');
     } finally {
       if (mounted) setState(() => _isLoading = false);
     }
@@ -99,29 +152,33 @@ class _LoginScreenState extends State<LoginScreen> {
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              const Icon(Icons.flight_takeoff, size: 80, color: Color(0xFF1565C0)),
+              const Icon(Icons.security, size: 80, color: Color(0xFF1565C0)), // Icono de seguridad
               const SizedBox(height: 20),
               const Text(
-                'Bienvenido a TravelApp',
+                'Acceso Seguro', // RF01
                 style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold, color: Color(0xFF1565C0)),
               ),
               const SizedBox(height: 40),
               TextField(
                 controller: _emailController,
+                maxLength: 50, // RF03: Límite desde la UI
                 decoration: const InputDecoration(
                   labelText: 'Correo electrónico',
                   border: OutlineInputBorder(),
                   prefixIcon: Icon(Icons.email),
+                  counterText: '', // Oculta el contador visual
                 ),
               ),
               const SizedBox(height: 16),
               TextField(
                 controller: _passwordController,
-                obscureText: true,
+                obscureText: true, // RF04: Ocultar caracteres
+                maxLength: 50, // RF03: Límite desde la UI
                 decoration: const InputDecoration(
                   labelText: 'Contraseña',
                   border: OutlineInputBorder(),
                   prefixIcon: Icon(Icons.lock),
+                  counterText: '', 
                 ),
               ),
               const SizedBox(height: 30),
@@ -133,7 +190,7 @@ class _LoginScreenState extends State<LoginScreen> {
                         minimumSize: const Size(double.infinity, 50),
                       ),
                       onPressed: _iniciarSesion,
-                      child: const Text('Iniciar Sesión', style: TextStyle(color: Colors.black, fontSize: 18, fontWeight: FontWeight.bold)),
+                      child: const Text('Ingresar', style: TextStyle(color: Colors.black, fontSize: 18, fontWeight: FontWeight.bold)),
                     ),
             ],
           ),
@@ -142,7 +199,6 @@ class _LoginScreenState extends State<LoginScreen> {
     );
   }
 }
-
 class MainTabScreen extends StatefulWidget {
   final String userId; 
   
@@ -154,8 +210,8 @@ class MainTabScreen extends StatefulWidget {
 
 class _MainTabScreenState extends State<MainTabScreen> {
   int _currentIndex = 0;
-  // REEMPLAZA MI_IP_LOCAL POR TU IP (ej. 192.168.100.11)
-  final String socketUrl = 'http://MI_IP_LOCAL:3000'; 
+  // REEMPLAZA MI_IP_LOCAL POR TU IP (ej. 192.168.0.107)
+  final String socketUrl = 'http://192.168.0.107:3000'; 
   late IO.Socket socket;
 
   @override
@@ -216,7 +272,8 @@ class _MainTabScreenState extends State<MainTabScreen> {
 
   Widget _buildPantalla() {
     if (_currentIndex == 0) return const ExplorarVuelosScreen();
-    return MisViajesScreen(socket: socket);
+  if (_currentIndex == 1) return MisViajesScreen(socket: socket);
+  return const PasajerosScreen();
   }
 
   @override
@@ -248,14 +305,9 @@ class _MainTabScreenState extends State<MainTabScreen> {
         },
         selectedItemColor: const Color(0xFF1565C0),
         items: const [
-          BottomNavigationBarItem(
-            icon: Icon(Icons.search),
-            label: 'Explorar Vuelos',
-          ),
-          BottomNavigationBarItem(
-            icon: Icon(Icons.airplane_ticket),
-            label: 'Mis Viajes',
-          ),
+          BottomNavigationBarItem(icon: Icon(Icons.search), label: 'Explorar'),
+          BottomNavigationBarItem(icon: Icon(Icons.airplane_ticket), label: 'Mis Viajes'),
+          BottomNavigationBarItem(icon: Icon(Icons.people), label: 'Pasajeros'),
         ],
       ),
     );
@@ -263,7 +315,7 @@ class _MainTabScreenState extends State<MainTabScreen> {
 }
 
 // ------------------------------------------------------------------------
-// MODIFICACIÓN EN LA PANTALLA EXPLORAR VUELOS PARA PRÁCTICAS 3 Y 4
+// PANTALLA EXPLORAR VUELOS (Solo Práctica 3 - Clima)
 // ------------------------------------------------------------------------
 class ExplorarVuelosScreen extends StatefulWidget {
   const ExplorarVuelosScreen({super.key});
@@ -275,8 +327,8 @@ class ExplorarVuelosScreen extends StatefulWidget {
 class _ExplorarVuelosScreenState extends State<ExplorarVuelosScreen> {
   List<dynamic> _viajes = [];
   bool _isLoading = true;
-  // REEMPLAZA MI_IP_LOCAL POR TU IP (ej. 192.168.100.11)
-  final String apiTripsUrl = 'http://MI_IP_LOCAL:3000/api/trips';
+  // REEMPLAZA MI_IP_LOCAL POR TU IP (ej. 192.168.0.107)
+  final String apiTripsUrl = 'http://192.168.0.107:3000/api/trips';
 
   @override
   void initState() {
@@ -297,19 +349,6 @@ class _ExplorarVuelosScreenState extends State<ExplorarVuelosScreen> {
       }
     } catch (e) {
       setState(() => _isLoading = false);
-    }
-  }
-
-  // NUEVO METODO PARA GUARDAR (Práctica 4)
-  void _guardarFavorito(Map<String, dynamic> viaje) async {
-    await DatabaseHelper.instance.insertFavorito({
-      'nombre_destino': viaje['title'] ?? 'Destino Desconocido',
-      'ubicacion': viaje['destination'] ?? 'Ubicación Desconocida',
-    });
-    if(mounted){
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Viaje guardado para ver offline', style: TextStyle(fontWeight: FontWeight.bold)), backgroundColor: Colors.green),
-      );
     }
   }
 
@@ -360,17 +399,10 @@ class _ExplorarVuelosScreenState extends State<ExplorarVuelosScreen> {
                     const SizedBox(height: 15),
                     Text(viaje['description'] ?? '', maxLines: 2, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 14, color: Colors.black87)),
                     
-                    // NUEVO WIDGET DE CLIMA (Práctica 3)
-                    const ClimaWidget(lat: 20.588, lon: -100.389), 
-
-                    // NUEVO BOTÓN PARA GUARDAR OFFLINE (Práctica 4)
-                    Align(
-                      alignment: Alignment.centerRight,
-                      child: IconButton(
-                        icon: const Icon(Icons.favorite_border, color: Colors.red),
-                        onPressed: () => _guardarFavorito(viaje),
-                      ),
-                    ),
+                    const SizedBox(height: 15),
+                    
+                    // WIDGET DE CLIMA (Práctica 3)
+                    const WeatherWidget(lat: 20.588, lon: -100.389), 
                   ],
                 ),
               ),
@@ -391,8 +423,8 @@ class MisViajesScreen extends StatefulWidget {
 }
 
 class _MisViajesScreenState extends State<MisViajesScreen> {
-  // REEMPLAZA MI_IP_LOCAL POR TU IP (ej. 192.168.100.11)
-  final String baseUrl = 'http://MI_IP_LOCAL:3000/api';
+  // REEMPLAZA MI_IP_LOCAL POR TU IP (ej. 192.168.0.107)
+  final String baseUrl = 'http://192.168.0.107:3000/api';
   bool _isBoarding = false;
   String _heartRate = "--";
   String _distance = "--";

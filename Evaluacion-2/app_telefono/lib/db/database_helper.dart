@@ -1,5 +1,6 @@
 import 'package:sqflite/sqflite.dart';
 import 'package:path/path.dart';
+import '../models/pasajero.dart';
 
 class DatabaseHelper {
   static final DatabaseHelper instance = DatabaseHelper._init();
@@ -9,7 +10,7 @@ class DatabaseHelper {
 
   Future<Database> get database async {
     if (_database != null) return _database!;
-    _database = await _initDB('viajes_offline.db');
+    _database = await _initDB('travelapp_offline.db');
     return _database!;
   }
 
@@ -17,36 +18,54 @@ class DatabaseHelper {
     final dbPath = await getDatabasesPath();
     final path = join(dbPath, filePath);
 
-    return await openDatabase(path, version: 1, onCreate: _createDB);
+    // CASO 4: Se cambia la versión de la BD a 2 para ejecutar la migración
+    return await openDatabase(
+      path, 
+      version: 2, 
+      onCreate: _createDB,
+      onUpgrade: _upgradeDB, // Maneja la actualización estructural
+    );
   }
 
   Future _createDB(Database db, int version) async {
+    // Creación de la tabla con todos los campos, incluyendo el nuevo (correo)
     await db.execute('''
-      CREATE TABLE favoritos (
+      CREATE TABLE pasajeros (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
-        nombre_destino TEXT NOT NULL,
-        ubicacion TEXT NOT NULL
+        nombre TEXT NOT NULL,
+        edad INTEGER NOT NULL,
+        tipo TEXT NOT NULL,
+        correo TEXT NOT NULL
       )
     ''');
   }
 
-  // Caso 1: Insertar destino
-  Future<int> insertFavorito(Map<String, dynamic> destino) async {
-    final db = await instance.database;
-    return await db.insert('favoritos', destino);
+  // CASO 4: Modificación de la base de datos (Evolución estructural)
+  Future _upgradeDB(Database db, int oldVersion, int newVersion) async {
+    if (oldVersion < 2) {
+      await db.execute('ALTER TABLE pasajeros ADD COLUMN correo TEXT NOT NULL DEFAULT ""');
+    }
   }
 
-  // Caso 2: Consultar destinos offline
-  Future<List<Map<String, dynamic>>> obtenerFavoritos() async {
+  // CASO 1: Insertar pasajeros
+  Future<int> insertPasajero(Pasajero pasajero) async {
     final db = await instance.database;
-    return await db.query('favoritos');
+    return await db.insert('pasajeros', pasajero.toMap());
   }
 
-  // Caso 3: Eliminar destino
-  Future<int> deleteFavorito(int id) async {
+  // CASO 2: Consultar (Equivalente a dao.obtenerTodos())
+  Future<List<Pasajero>> obtenerTodos() async {
     final db = await instance.database;
-    return await db.delete(
-      'favoritos',
+    final result = await db.query('pasajeros');
+    return result.map((json) => Pasajero.fromMap(json)).toList();
+  }
+
+  // CASO 3: Actualizar información (Modificar el tipo/carrera)
+  Future<int> actualizarTipoPasajero(int id, String nuevoTipo) async {
+    final db = await instance.database;
+    return await db.update(
+      'pasajeros',
+      {'tipo': nuevoTipo},
       where: 'id = ?',
       whereArgs: [id],
     );

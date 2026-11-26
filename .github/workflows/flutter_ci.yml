@@ -1,0 +1,37 @@
+name: Flutter CI - TravelApp
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  build_and_test:
+    name: Analisis estatico y pruebas automatizadas
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: Evaluacion-2/app_telefono
+
+    steps:
+      - name: Descargar repositorio
+        uses: actions/checkout@v4
+
+      - name: Configurar Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+
+      - name: Verificar version de Flutter
+        run: flutter --version
+
+      - name: Instalar dependencias
+        run: flutter pub get
+
+      - name: Analisis estatico (flutter analyze)
+        run: flutter analyze --no-fatal-infos --no-fatal-warnings
+
+      - name: Ejecutar pruebas unitarias y de integracion
+        run: flutter test --reporter expanded

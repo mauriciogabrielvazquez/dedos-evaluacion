@@ -6,24 +6,26 @@ class WeatherWidget extends StatefulWidget {
   final double lat;
   final double lon;
 
-  const WeatherWidget({Key? key, required this.lat, required this.lon}) : super(key: key);
+  const WeatherWidget({super.key, required this.lat, required this.lon});
 
   @override
-  _WeatherWidgetState createState() => _WeatherWidgetState();
+  State<WeatherWidget> createState() => _WeatherWidgetState();
 }
 
 class _WeatherWidgetState extends State<WeatherWidget> {
   String temperatura = "";
-  bool isLoading = true;
+  bool isLoading = false;
   bool isError = false;
-
-  @override
-  void initState() {
-    super.initState();
-    _obtenerClima();
-  }
+  bool isInitial = true; // Controla si aún no se ha hecho la primera consulta
 
   Future<void> _obtenerClima() async {
+    setState(() {
+      isInitial = false;
+      isLoading = true;
+      isError = false;
+    });
+
+    // RF03: URL preasignada (Apunta a Open-Meteo usando las coordenadas recibidas)
     final url = Uri.parse(
         'https://api.open-meteo.com/v1/forecast?latitude=${widget.lat}&longitude=${widget.lon}&current_weather=true');
 
@@ -42,6 +44,7 @@ class _WeatherWidgetState extends State<WeatherWidget> {
         });
       }
     } catch (e) {
+      // Entra aquí si no hay internet o si la URL es incorrecta
       setState(() {
         isError = true;
         isLoading = false;
@@ -51,32 +54,76 @@ class _WeatherWidgetState extends State<WeatherWidget> {
 
   @override
   Widget build(BuildContext context) {
-    if (isLoading) {
-      return const Column(
-        children: [
-          CircularProgressIndicator(),
-          SizedBox(height: 8),
-          Text('Consultando clima...'),
-        ],
-      );
-    }
-
-    if (isError) {
-      return const Text(
-        'No fue posible obtener el clima.',
-        style: TextStyle(color: Colors.red),
-      );
-    }
-
     return Card(
+      elevation: 0,
+      color: const Color(0xFFF1F5F9), // Fondo sutil que combina con tu paleta
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(15),
+        side: const BorderSide(color: Color(0xFFE2E8F0)),
+      ),
       child: Padding(
         padding: const EdgeInsets.all(16.0),
-        child: Row(
+        child: Column(
           mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const Icon(Icons.thermostat, color: Colors.orange),
-            const SizedBox(width: 8),
-            Text('Clima actual: $temperatura', style: const TextStyle(fontSize: 18)),
+            // RF01: Al iniciar la aplicación deberá mostrar: Consulta de información
+            const Text(
+              'Consulta de información',
+              style: TextStyle(
+                fontSize: 16, 
+                fontWeight: FontWeight.bold, 
+                color: Color(0xFF1565C0) // Azul Agua de tu paleta
+              ),
+            ),
+            const SizedBox(height: 15),
+
+            // RF05: Mientras se realiza la petición deberá mostrarse: Consultando...
+            if (isLoading)
+              const Row(
+                children: [
+                  SizedBox(
+                    width: 20, 
+                    height: 20, 
+                    child: CircularProgressIndicator(strokeWidth: 2)
+                  ),
+                  SizedBox(width: 15),
+                  Text('Consultando...', style: TextStyle(fontSize: 14)),
+                ],
+              ),
+
+            // RF06: Si existe un error de conexión deberá mostrarse: No fue posible obtener la información.
+            if (isError) ...[
+              const Text(
+                'No fue posible obtener la información.',
+                style: TextStyle(color: Colors.red, fontWeight: FontWeight.bold),
+              ),
+              const SizedBox(height: 10),
+            ],
+
+            // RF04: La información obtenida deberá mostrarse en pantalla.
+            if (!isInitial && !isLoading && !isError)
+              Row(
+                children: [
+                  const Icon(Icons.thermostat, color: Colors.orange),
+                  const SizedBox(width: 8),
+                  Text('Clima actual: $temperatura', style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w500)),
+                ],
+              ),
+
+            // RF02: Deberá existir un botón: CONSULTAR
+            if (isInitial || isError)
+              Align(
+                alignment: Alignment.centerRight,
+                child: ElevatedButton(
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFF1565C0), // Azul Agua
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                  ),
+                  onPressed: _obtenerClima, // RF03: Realiza la petición al presionar
+                  child: const Text('CONSULTAR', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                ),
+              ),
           ],
         ),
       ),

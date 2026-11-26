@@ -3,7 +3,7 @@ import 'package:http/http.dart' as http;
 import '../models/trip.dart';
 
 class ApiService {
-  static const String baseUrl = 'http://192.168.100.11:3000/api';
+  static const String baseUrl = 'http://192.168.0.107:3000/api';
 
   Future<List<Trip>> getTrips() async {
     try {
